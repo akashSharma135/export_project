@@ -96,7 +96,7 @@ def get_group_expenses(sObj, group_id = None):
     
 def get_user_name(user):
     if user != None:
-        return user.getFirstName() + " " + user.getLastName()
+        return user.getFirstName() + user.getLastName() if user.getLastName() else ''
     else:
         return None
 
@@ -119,50 +119,99 @@ def expenses_to_csv(expenses, filepath = None, include_deleted = None, download_
         if not filepath:
             filepath = 'data_export.csv'
 
-    if include_deleted == None:
-        include_deleted = yes_or_no("Include deleted expenses?\n", False)
+    # if include_deleted == None:
+    #     include_deleted = yes_or_no("Include deleted expenses?\n", False)
 
-    if download_receipts == None:
-        download_receipts = yes_or_no("Download all receipts to a folder in the current directory?\n", False)
-        if download_receipts:
-            image_path = input("Enter folder name or path for images. Leave blank for default (./images/).\n")
-            if not image_path:
-                image_path = 'images'
+    # if download_receipts == None:
+    #     download_receipts = yes_or_no("Download all receipts to a folder in the current directory?\n", False)
+    #     if download_receipts:
+    #         image_path = input("Enter folder name or path for images. Leave blank for default (./images/).\n")
+    #         if not image_path:
+    #             image_path = 'images'
 
     # column_order = []
     df = []
+    
     for expense in expenses:
+        users = expense.getUsers()
+        # print(users[0].getFirstName())
+        users_list= []
+        paid_share = []
+        owed_share = []
+        for i in range(0, len(users)):
+            try:
+                users_list.append(users[i].getFirstName())
+                paid_share.append(users[i].getPaidShare())
+                owed_share.append(users[i].getOwedShare())
+                # print()
+                # print(users[i].getPaidShare())
+                # print(users[i].getOwedShare())
+            except TypeError:
+                pass
         df_d = {
             'Description': expense.getDescription(),
             'Date': expense.getDate(),
-            'Category': expense.getCategory().getName(),
-            'Details' : expense.getDetails(),
-            'Cost': expense.getCost(),
-            'Currency': expense.getCurrencyCode(),
-            'Receipt': str(expense.getReceipt().getOriginal()),
-            'Deleted': expense.getDeletedBy(),
+            # 'Category': expense.getCategory().getName(),
+            # 'Details' : expense.getDetails(),
+            'Total_Expense': expense.getCost(),
+            # 'Currency': expense.getCurrencyCode(),
+            'Deleted_by': expense.getDeletedBy(),
+            'Included_in_expense': users_list,
+            'Paid_share': paid_share,
+            'Owed_share': owed_share,
+            'Receipt': str(expense.getReceipt().getOriginal())
         }
         df.append(df_d)
 
     df = pd.DataFrame(df)
 
-    if download_receipts:
-        df.apply(lambda row: download_receipt(row['Receipt'], image_path), axis=1)
+    # if download_receipts:
+    #     df.apply(lambda row: download_receipt(row['Receipt'], image_path), axis=1)
 
     if include_deleted:
-        df['Deleted'] = df.apply(lambda row: get_user_name(row['Deleted']), axis=1)
+        df['Deleted_by'] = df.apply(lambda row: get_user_name(row['Deleted_by']), axis=1)
     else:
         # Delete these row indexes from dataFrame
-        df = df[df['Deleted'].isna()]
+        df = df[df['Deleted_by'].isna()]
         # Delete Column
-        df = df.drop(columns=['Deleted'])
+        df = df.drop(columns=['Deleted_by'])
     
     # df = df.reindex(columns=column_uav)  # ensure columns are in correct order
     df.to_csv(filepath, encoding='utf-8', index=False)
 
+def authorize_by_api(path_to_auth = None):
+    if path_to_auth == None:
+        path_to_auth = 'auth.json'
+    
+    if os.path.isfile(path_to_auth):
+        with open(path_to_auth) as json_file:
+            auth = json.load(json_file)
+        sObj = Splitwise(auth['consumer_key'],auth['consumer_secret'],api_key=auth['api_key'])
+    else:
+        print("No pre-existing authorization found. Creating new auth")
+        auth = {}
+        # Go to https://secure.splitwise.com/apps/new and register the app to get your consumer key and secret
+        auth['consumer_key'] = input("Please enter your consumer key:\n")
+        auth['consumer_secret'] = input("Please enter your consumer secret:\n")
+
+        sObj = Splitwise(auth['consumer_key'],auth['consumer_secret'])
+        url, auth['secret'] = sObj.getAuthorizeURL()
+        print("Authroize via the following URL")
+        print(url)
+
+        auth['oauth_token'] = url.split("=")[1]
+        auth['api_key'] = input("Please enter the api_key:\n")
+
+        save = input("Save these credentials for future use? (y/n):\n")
+        if save == "y":
+            with open(path_to_auth, 'w') as outfile:
+                json.dump(auth, outfile, indent=4)
+        print("auth.json file has been saved in the current directory. Keep this file safe.")
+    
+    return sObj
 
 def main():
-    sObj = authorize()
+    sObj = authorize_by_api()
     expenses = get_group_expenses(sObj)
     expenses_to_csv(expenses)
 
