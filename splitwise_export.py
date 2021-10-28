@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import wget
+import pdfkit
 
 class cd:
     """Context manager for changing the current working directory"""
@@ -112,12 +113,12 @@ def download_receipt(url, folder = None):
         pass
         
 
-def expenses_to_csv(expenses, filepath = None, include_deleted = None, download_receipts = None):
-
+def expenses_to_pdf(expenses, filepath = None, include_deleted = None, download_receipts = None):
+    html_path = 'html_data.html'
     if filepath == None:
-        filepath = input("Enter filename (with .csv extension). Leave blank for default (data_export.csv). File will be saved in current directory\n")
+        filepath = input("Enter filename (with .pdf extension). Leave blank for default (data_export.pdf). File will be saved in receipts directory\n")
         if not filepath:
-            filepath = 'data_export.csv'
+            filepath = 'data_export.pdf'
 
     # if include_deleted == None:
     #     include_deleted = yes_or_no("Include deleted expenses?\n", False)
@@ -143,9 +144,7 @@ def expenses_to_csv(expenses, filepath = None, include_deleted = None, download_
                 users_list.append(users[i].getFirstName())
                 paid_share.append(users[i].getPaidShare())
                 owed_share.append(users[i].getOwedShare())
-                # print()
-                # print(users[i].getPaidShare())
-                # print(users[i].getOwedShare())
+    
             except TypeError:
                 pass
         df_d = {
@@ -158,7 +157,6 @@ def expenses_to_csv(expenses, filepath = None, include_deleted = None, download_
             'Deleted_by': expense.getDeletedBy(),
             'Included_in_expense': users_list,
             'Paid_share': paid_share,
-            'Owed_share': owed_share,
             'Receipt': str(expense.getReceipt().getOriginal())
         }
         df.append(df_d)
@@ -177,7 +175,11 @@ def expenses_to_csv(expenses, filepath = None, include_deleted = None, download_
         df = df.drop(columns=['Deleted_by'])
     
     # df = df.reindex(columns=column_uav)  # ensure columns are in correct order
-    df.to_csv(filepath, encoding='utf-8', index=False)
+    # df.to_csv(filepath, encoding='utf-8', index=False)
+    df.to_html(html_path, encoding='utf-8', index=False)
+    pdfkit.from_file(html_path, filepath)
+    os.remove(html_path)
+    
 
 def authorize_by_api(path_to_auth = None):
     if path_to_auth == None:
