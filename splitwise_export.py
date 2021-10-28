@@ -215,7 +215,7 @@ def authorize_by_api(path_to_auth = None):
 def main():
     sObj = authorize_by_api()
     expenses = get_group_expenses(sObj)
-    expenses_to_csv(expenses)
+    expenses_to_pdf(expenses)
 
 if __name__ == '__main__':
     main()
