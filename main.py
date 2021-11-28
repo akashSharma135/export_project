@@ -2,6 +2,6 @@ import splitwise_export as spwe
 
 sObj = spwe.authorize_by_api()
 
-expenses = spwe.get_group_expenses(sObj)
+expenses, members = spwe.get_group_expenses(sObj)
 
-spwe.expenses_to_pdf(expenses)
+spwe.expenses_to_excel(expenses, members)

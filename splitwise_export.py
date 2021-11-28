@@ -3,7 +3,7 @@ import pandas as pd
 import json
 import os
 import wget
-import pdfkit
+# import pdfkit
 
 class cd:
     """Context manager for changing the current working directory"""
@@ -91,9 +91,14 @@ def get_group_expenses(sObj, group_id = None):
     updated_after = None
     updated_before = None
 
-    expenses = sObj.getExpenses(offset,limit,group_id,friendship_id,dated_after,dated_before,updated_after,updated_before)
+    group = sObj.getGroup(group_id)
+    members_obj = group.getMembers()
+    members = []
+    for member in members_obj:
+        members.append(member.getFirstName())
 
-    return expenses
+    expenses = sObj.getExpenses(offset,limit,group_id,friendship_id,dated_after,dated_before,updated_after,updated_before)
+    return expenses, members
     
 def get_user_name(user):
     if user != None:
@@ -113,72 +118,46 @@ def download_receipt(url, folder = None):
         pass
         
 
-def expenses_to_pdf(expenses, filepath = None, include_deleted = None, download_receipts = None):
-    html_path = 'html_data.html'
+def expenses_to_excel(expenses, members, filepath = None, include_deleted = None, download_receipts = None):
     if filepath == None:
-        filepath = input("Enter filename (with .pdf extension). Leave blank for default (data_export.pdf). File will be saved in receipts directory\n")
+        filepath = input("Enter filename (with .xlsx extension). Leave blank for default (data_export.xlsx). File will be saved in receipts directory\n")
         if not filepath:
-            filepath = 'data_export.pdf'
+            filepath = 'data_export.xlsx'
 
-    # if include_deleted == None:
-    #     include_deleted = yes_or_no("Include deleted expenses?\n", False)
+    detail = []
+    receipts = []
+    columns = [
+            'Date', 
+            'Description', 
+            'Category', 
+            'Currency', 
+            'Cost'
+        ]
 
-    # if download_receipts == None:
-    #     download_receipts = yes_or_no("Download all receipts to a folder in the current directory?\n", False)
-    #     if download_receipts:
-    #         image_path = input("Enter folder name or path for images. Leave blank for default (./images/).\n")
-    #         if not image_path:
-    #             image_path = 'images'
+    for member in members:
+            columns.append(member)
 
-    # column_order = []
-    df = []
-    
     for expense in expenses:
         users = expense.getUsers()
-        # print(users[0].getFirstName())
-        users_list= []
-        paid_share = []
-        owed_share = []
+        
+        data = [
+            expense.getDate(), 
+            expense.getDescription(), 
+            expense.getCategory().getName(), 
+            expense.getCurrencyCode(), 
+            expense.getCost()
+        ]
+
         for i in range(0, len(users)):
-            try:
-                users_list.append(users[i].getFirstName())
-                paid_share.append(users[i].getPaidShare())
-                owed_share.append(users[i].getOwedShare())
-    
-            except TypeError:
-                pass
-        df_d = {
-            'Description': expense.getDescription(),
-            'Date': expense.getDate(),
-            # 'Category': expense.getCategory().getName(),
-            # 'Details' : expense.getDetails(),
-            'Total_Expense': expense.getCost(),
-            # 'Currency': expense.getCurrencyCode(),
-            'Deleted_by': expense.getDeletedBy(),
-            'Included_in_expense': users_list,
-            'Paid_share': paid_share,
-            'Receipt': str(expense.getReceipt().getOriginal())
-        }
-        df.append(df_d)
+            data.append(users[i].getPaidShare())
+        
+        receipts.append(str(expense.getReceipt().getOriginal()))
+        detail.append(data)
 
-    df = pd.DataFrame(df)
+    df = pd.DataFrame(data=detail, columns=columns)
+    df['Receipt'] = receipts
 
-    # if download_receipts:
-    #     df.apply(lambda row: download_receipt(row['Receipt'], image_path), axis=1)
-
-    if include_deleted:
-        df['Deleted_by'] = df.apply(lambda row: get_user_name(row['Deleted_by']), axis=1)
-    else:
-        # Delete these row indexes from dataFrame
-        df = df[df['Deleted_by'].isna()]
-        # Delete Column
-        df = df.drop(columns=['Deleted_by'])
-    
-    # df = df.reindex(columns=column_uav)  # ensure columns are in correct order
-    # df.to_csv(filepath, encoding='utf-8', index=False)
-    df.to_html(html_path, encoding='utf-8', index=False)
-    pdfkit.from_file(html_path, filepath)
-    os.remove(html_path)
+    df.to_excel(filepath + '.xlsx')
     
 
 def authorize_by_api(path_to_auth = None):
@@ -215,7 +194,7 @@ def authorize_by_api(path_to_auth = None):
 def main():
     sObj = authorize_by_api()
     expenses = get_group_expenses(sObj)
-    expenses_to_pdf(expenses)
+    expenses_to_excel(expenses)
 
 if __name__ == '__main__':
     main()
